@@ -16,23 +16,26 @@ router.post('/', auth, async (req, res) => {
       totalAmount,
       subtotal,
       paymentMethod,
-      createdBy
+      createdBy,
+      userId: req.user.id // Add the authenticated user's ID to the order
     });
 
+    // Update inventory quantities for each item in the order
+    for (const item of items) {
+      await Item.findByIdAndUpdate(
+        item.itemId,
+        { $inc: { quantity: -item.quantity } } // Decrease the quantity
+      );
+    }
+
     // Populate the response with all order data for the receipt
+    const populatedOrder = await Order.findById(order._id)
+      .populate('items.itemId', 'name price')
+      .populate('createdBy', 'username');
+
     res.json({
       message: 'Order created successfully',
-      order: {
-        _id: order._id,
-        orderType: order.orderType,
-        items: order.items,
-        additionalPayments: order.additionalPayments,
-        totalAmount: order.totalAmount,
-        subtotal: order.subtotal,
-        paymentMethod: order.paymentMethod,
-        createdBy: order.createdBy,
-        createdAt: order.createdAt
-      }
+      order: populatedOrder
     });
   } catch (err) {
     console.error('Error creating order:', err);
@@ -40,14 +43,57 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// LIST order history
+// LIST order history - Returns ALL orders (already correct!)
 router.get('/', auth, async (req, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 });
+    const orders = await Order.find()
+      .sort({ createdAt: -1 })
+      .populate('items.itemId', 'name price') // Populate item details
+      .populate('createdBy', 'username'); // Populate user details
+    
     res.json(orders);
   } catch (err) {
     console.error('Error fetching orders:', err);
     res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+// GET single order by ID
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('items.itemId', 'name price')
+      .populate('createdBy', 'username');
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    res.json(order);
+  } catch (err) {
+    console.error('Error fetching order:', err);
+    res.status(500).json({ error: 'Failed to fetch order' });
+  }
+});
+
+// UPDATE order status
+router.patch('/:id/status', auth, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    ).populate('items.itemId', 'name price');
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    res.json({ message: 'Order status updated', order });
+  } catch (err) {
+    console.error('Error updating order:', err);
+    res.status(500).json({ error: 'Failed to update order' });
   }
 });
 
