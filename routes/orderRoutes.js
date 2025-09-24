@@ -17,18 +17,18 @@ router.post('/', auth, async (req, res) => {
       subtotal,
       paymentMethod,
       createdBy,
-      userId: req.user.id // Add the authenticated user's ID to the order
+      userId: req.user.id // still keep track of who created it
     });
 
     // Update inventory quantities for each item in the order
     for (const item of items) {
       await Item.findByIdAndUpdate(
         item.itemId,
-        { $inc: { quantity: -item.quantity } } // Decrease the quantity
+        { $inc: { quantity: -item.quantity } } // decrease stock
       );
     }
 
-    // Populate the response with all order data for the receipt
+    // Populate the response with all order data
     const populatedOrder = await Order.findById(order._id)
       .populate('items.itemId', 'name price')
       .populate('createdBy', 'username');
@@ -43,14 +43,14 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// LIST order history - Returns ALL orders (already correct!)
+// LIST order history - Returns ALL orders for ALL users
 router.get('/', auth, async (req, res) => {
   try {
     const orders = await Order.find()
       .sort({ createdAt: -1 })
-      .populate('items.itemId', 'name price') // Populate item details
-      .populate('createdBy', 'username'); // Populate user details
-    
+      .populate('items.itemId', 'name price')
+      .populate('createdBy', 'username');
+
     res.json(orders);
   } catch (err) {
     console.error('Error fetching orders:', err);
