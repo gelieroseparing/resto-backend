@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -8,44 +9,47 @@ const app = express();
 
 /* ------------------------------- Middleware ------------------------------- */
 // CORS configuration - allow your frontend to access the API
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000', // ✅ Adjust to deployed frontend URL
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000', // Adjust to deployed frontend URL
+    credentials: true,
+  })
+);
 
 // Body parsing
-app.use(express.json({ limit: '10mb' })); 
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded images (e.g., profile pictures)
+// Serve uploaded images (profile pictures, etc.)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /* ------------------------------ MongoDB Setup ----------------------------- */
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => console.log('✅ MongoDB connected successfully'))
-  .catch(err => {
+  .catch((err) => {
     console.error('❌ MongoDB connection error:', err);
-    process.exit(1); // Exit if DB connection fails
+    process.exit(1);
   });
 
 /* --------------------------------- Routes -------------------------------- */
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/items', require('./routes/itemRoutes'));
-app.use('/api/orders', require('./routes/orderRoutes'));
-app.use('/api/categories', require('./routes/categoryRoutes'));
+// Add other routes if needed:
+// app.use('/api/items', require('./routes/itemRoutes'));
+// app.use('/api/orders', require('./routes/orderRoutes'));
+// app.use('/api/categories', require('./routes/categoryRoutes'));
 
-// Health check / root route
-app.get("/", (req, res) => {
-  res.send("🍽️ POS and Inventory Management API is running 🚀");
+/* -------------------- Health Check / Default Route ----------------------- */
+app.get('/', (req, res) => {
+  res.send('🍽️ POS and Inventory Management API is running 🚀');
 });
 
-/* -------------------------- Error Handling Setup ------------------------- */
-// Global error handler
+/* -------------------------- Global Error Handling ------------------------ */
 app.use((err, req, res, next) => {
-  console.error("🔥 Global Error:", err.stack);
+  console.error('🔥 Global Error:', err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
