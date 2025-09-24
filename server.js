@@ -1,42 +1,37 @@
-require('dotenv').config(); // Load .env variables
+// server.js
+require('dotenv').config(); // Load env variables
 const express = require('express');
 const mongoose = require('mongoose');
 const path = require('path');
-const cors = require('cors');
 
-// Routes
 const authRoutes = require('./routes/authRoutes');
-const itemRoutes = require('./routes/itemRoutes');
-const orderRoutes = require('./routes/orderRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ---------------------- MIDDLEWARE ----------------------
-app.use(cors()); // Enable CORS
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+// Middleware
+app.use(cors()); // if you use cors elsewhere, import and configure
+app.use(express.json()); // parse JSON
+app.use(express.urlencoded({ extended: true })); // parse URL-encoded
 
-// Serve uploaded images
+// Serve static files (images)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ---------------------- ROUTES ----------------------
+// Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/items', itemRoutes);
-app.use('/api/orders', orderRoutes);
 
-// ---------------------- DEFAULT ROUTE ----------------------
+// Default route
 app.get('/', (req, res) => {
   res.send('Resto POS Backend is running');
 });
 
-// ---------------------- ERROR HANDLER ----------------------
+// Error handler
 app.use((err, req, res, next) => {
   console.error('Server error:', err.message);
   res.status(500).json({ message: 'Internal server error', error: err.message });
 });
 
-// ---------------------- CONNECT TO MONGODB ----------------------
+// Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,

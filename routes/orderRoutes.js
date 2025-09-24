@@ -1,19 +1,28 @@
 const express = require('express');
 const Order = require('../models/Order');
 const Item = require('../models/Item');
-const { verifyToken } = require('../middleware/auth'); // Import verifyToken
+const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
 /* ------------------------- CREATE ORDER ------------------------- */
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { orderType, items, additionalPayments, totalAmount, subtotal, paymentMethod } = req.body;
+    const {
+      orderType,
+      items,
+      additionalPayments,
+      totalAmount,
+      subtotal,
+      paymentMethod
+    } = req.body;
 
+    // Basic validation
     if (!items || items.length === 0) {
       return res.status(400).json({ message: 'Order must include at least one item' });
     }
 
+    // Create the order document
     const order = await Order.create({
       orderType,
       items,
@@ -25,11 +34,12 @@ router.post('/', verifyToken, async (req, res) => {
       userId: req.user.userId,
     });
 
-    // Decrease stock
+    // Decrease stock quantities for each item ordered
     for (const item of items) {
       await Item.findByIdAndUpdate(item.itemId, { $inc: { quantity: -item.quantity } });
     }
 
+    // Populate references for response
     const populatedOrder = await Order.findById(order._id)
       .populate('items.itemId', 'name price')
       .populate('createdBy', 'username');

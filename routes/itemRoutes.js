@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const Item = require('../models/Item');
-const { verifyToken } = require('../middleware/auth'); // Import only verifyToken
+const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -18,25 +18,28 @@ const upload = multer({
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Only image files are allowed!'), false);
   },
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 /* ------------------------- CREATE ITEM ------------------------- */
 router.post('/', verifyToken, upload.single('image'), async (req, res) => {
   try {
-    const { name, category, price } = req.body;
+    const { name, category, price, description, isAvailable } = req.body;
     if (!name || !category || !price) {
-      return res.status(400).json({ message: 'All fields are required' });
+      return res.status(400).json({ message: 'Name, category, and price are required' });
     }
 
-    const item = await Item.create({
+    const newItem = new Item({
       name,
       category,
       price,
-      imageUrl: req.file ? `/uploads/${req.file.filename}` : '', // matches your model
+      description,
+      isAvailable: isAvailable !== undefined ? JSON.parse(isAvailable) : true,
+      imageUrl: req.file ? `/uploads/${req.file.filename}` : '',
     });
 
-    res.status(201).json({ message: 'Item created', item });
+    await newItem.save();
+    res.status(201).json({ message: 'Item created', item: newItem });
   } catch (err) {
     console.error('Error creating item:', err);
     res.status(500).json({ message: 'Failed to create item' });
@@ -69,7 +72,16 @@ router.get('/:id', async (req, res) => {
 /* ------------------------- UPDATE ITEM ------------------------- */
 router.put('/:id', verifyToken, upload.single('image'), async (req, res) => {
   try {
-    const updateData = { ...req.body };
+    const { name, category, price, description, isAvailable } = req.body;
+
+    const updateData = {
+      name,
+      category,
+      price,
+      description,
+      isAvailable: isAvailable !== undefined ? JSON.parse(isAvailable) : true
+    };
+
     if (req.file) {
       updateData.imageUrl = `/uploads/${req.file.filename}`;
     }
