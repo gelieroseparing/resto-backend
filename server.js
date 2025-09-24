@@ -1,8 +1,8 @@
-// server.js
 require('dotenv').config(); // Load env variables
 const express = require('express');
 const mongoose = require('mongoose');
 const path = require('path');
+const cors = require('cors'); // <-- Add this line
 
 const authRoutes = require('./routes/authRoutes');
 
@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors()); // if you use cors elsewhere, import and configure
+app.use(cors()); // now cors is defined
 app.use(express.json()); // parse JSON
 app.use(express.urlencoded({ extended: true })); // parse URL-encoded
 
