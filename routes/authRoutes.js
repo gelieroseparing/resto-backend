@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const User = require('../models/User');
-const auth = require('../middleware/auth'); // ✅ Authentication middleware
+const auth = require('../middleware/auth'); // Authentication middleware
 
 const router = express.Router();
 
@@ -235,11 +235,6 @@ router.put('/change-password', auth, async (req, res) => {
 /* ---------------------------- GET ALL USERS ---------------------------- */
 router.get('/users', auth, async (req, res) => {
   try {
-    // Optional: Only allow admins
-    // if (req.user.position !== 'admin') {
-    //   return res.status(403).json({ message: 'Access denied' });
-    // }
-
     const users = await User.find().select('-password').sort({ createdAt: -1 });
     res.json(users);
   } catch (err) {
