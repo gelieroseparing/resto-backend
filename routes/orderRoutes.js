@@ -1,12 +1,12 @@
 const express = require('express');
 const Order = require('../models/Order');
 const Item = require('../models/Item');
-const auth = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth'); // Import verifyToken
 
 const router = express.Router();
 
 /* ------------------------- CREATE ORDER ------------------------- */
-router.post('/', auth, async (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
   try {
     const { orderType, items, additionalPayments, totalAmount, subtotal, paymentMethod } = req.body;
 
@@ -21,8 +21,8 @@ router.post('/', auth, async (req, res) => {
       totalAmount,
       subtotal,
       paymentMethod,
-      createdBy: req.user.id,
-      userId: req.user.id,
+      createdBy: req.user.userId,
+      userId: req.user.userId,
     });
 
     // Decrease stock
@@ -42,7 +42,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 /* ------------------------- GET ALL ORDERS ------------------------- */
-router.get('/', auth, async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
   try {
     const orders = await Order.find()
       .sort({ createdAt: -1 })
@@ -57,7 +57,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 /* ------------------------- GET SINGLE ORDER ------------------------- */
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', verifyToken, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate('items.itemId', 'name price')
@@ -72,7 +72,7 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 /* ------------------------- UPDATE ORDER STATUS ------------------------- */
-router.patch('/:id/status', auth, async (req, res) => {
+router.patch('/:id/status', verifyToken, async (req, res) => {
   try {
     const { status } = req.body;
     const order = await Order.findByIdAndUpdate(

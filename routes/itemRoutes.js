@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const Item = require('../models/Item');
-const auth = require('../middleware/auth');
+const { verifyToken } = require('../middleware/auth'); // Import only verifyToken
 
 const router = express.Router();
 
@@ -22,18 +22,18 @@ const upload = multer({
 });
 
 /* ------------------------- CREATE ITEM ------------------------- */
-router.post('/', auth, upload.single('image'), async (req, res) => {
+router.post('/', verifyToken, upload.single('image'), async (req, res) => {
   try {
-    const { name, price, quantity } = req.body;
-    if (!name || !price || !quantity) {
+    const { name, category, price } = req.body;
+    if (!name || !category || !price) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
     const item = await Item.create({
       name,
+      category,
       price,
-      quantity,
-      image: req.file ? `/uploads/${req.file.filename}` : undefined,
+      imageUrl: req.file ? `/uploads/${req.file.filename}` : '', // matches your model
     });
 
     res.status(201).json({ message: 'Item created', item });
@@ -67,11 +67,11 @@ router.get('/:id', async (req, res) => {
 });
 
 /* ------------------------- UPDATE ITEM ------------------------- */
-router.put('/:id', auth, upload.single('image'), async (req, res) => {
+router.put('/:id', verifyToken, upload.single('image'), async (req, res) => {
   try {
     const updateData = { ...req.body };
     if (req.file) {
-      updateData.image = `/uploads/${req.file.filename}`;
+      updateData.imageUrl = `/uploads/${req.file.filename}`;
     }
 
     const updatedItem = await Item.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -85,7 +85,7 @@ router.put('/:id', auth, upload.single('image'), async (req, res) => {
 });
 
 /* ------------------------- DELETE ITEM ------------------------- */
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const deletedItem = await Item.findByIdAndDelete(req.params.id);
     if (!deletedItem) return res.status(404).json({ message: 'Item not found' });
