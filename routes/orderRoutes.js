@@ -1,14 +1,21 @@
-const router = require('express').Router();
+// routes/orderRoutes.js
+const express = require('express');
 const Order = require('../models/Order');
 const Item = require('../models/Item');
-const auth = require('../middleware/auth');
+const { verifyToken, requireManager } = require('../middleware/auth');
 
-// CREATE order
-router.post('/', auth, async (req, res) => {
+const router = express.Router();
+
+/* --------------------------- CREATE ORDER --------------------------- */
+router.post('/', verifyToken, requireManager, async (req, res) => {
   try {
-    const { orderType, items, additionalPayments, totalAmount, subtotal, paymentMethod, createdBy } = req.body;
+    const { orderType, items, additionalPayments, totalAmount, subtotal, paymentMethod } = req.body;
 
-    // Create the order
+    if (!items || items.length === 0) {
+      return res.status(400).json({ message: 'No items provided for the order' });
+    }
+
+    // Create order
     const order = await Order.create({
       orderType,
       items,
@@ -16,84 +23,77 @@ router.post('/', auth, async (req, res) => {
       totalAmount,
       subtotal,
       paymentMethod,
-      createdBy,
-      userId: req.user.id // still keep track of who created it
+      createdBy: req.user.username,
+      userId: req.user.id,
     });
 
-    // Update inventory quantities for each item in the order
+    // Decrease item stock
     for (const item of items) {
-      await Item.findByIdAndUpdate(
-        item.itemId,
-        { $inc: { quantity: -item.quantity } } // decrease stock
-      );
+      await Item.findByIdAndUpdate(item.itemId, { $inc: { quantity: -item.quantity } });
     }
 
-    // Populate the response with all order data
+    // Populate response
     const populatedOrder = await Order.findById(order._id)
       .populate('items.itemId', 'name price')
-      .populate('createdBy', 'username');
+      .populate('userId', 'username');
 
-    res.json({
-      message: 'Order created successfully',
-      order: populatedOrder
-    });
+    res.status(201).json({ message: 'Order created successfully', order: populatedOrder });
   } catch (err) {
     console.error('Error creating order:', err);
-    res.status(500).json({ error: 'Failed to place order' });
+    res.status(500).json({ message: 'Failed to create order' });
   }
 });
 
-// LIST order history - Returns ALL orders for ALL users
-router.get('/', auth, async (req, res) => {
+/* --------------------------- GET ALL ORDERS --------------------------- */
+router.get('/', verifyToken, requireManager, async (req, res) => {
   try {
     const orders = await Order.find()
       .sort({ createdAt: -1 })
       .populate('items.itemId', 'name price')
-      .populate('createdBy', 'username');
+      .populate('userId', 'username');
 
     res.json(orders);
   } catch (err) {
     console.error('Error fetching orders:', err);
-    res.status(500).json({ error: 'Failed to fetch orders' });
+    res.status(500).json({ message: 'Failed to fetch orders' });
   }
 });
 
-// GET single order by ID
-router.get('/:id', auth, async (req, res) => {
+/* --------------------------- GET SINGLE ORDER --------------------------- */
+router.get('/:id', verifyToken, requireManager, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate('items.itemId', 'name price')
-      .populate('createdBy', 'username');
-    
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-    
+      .populate('userId', 'username');
+
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
     res.json(order);
   } catch (err) {
     console.error('Error fetching order:', err);
-    res.status(500).json({ error: 'Failed to fetch order' });
+    res.status(500).json({ message: 'Failed to fetch order' });
   }
 });
 
-// UPDATE order status
-router.patch('/:id/status', auth, async (req, res) => {
+/* --------------------------- UPDATE ORDER STATUS --------------------------- */
+router.patch('/:id/status', verifyToken, requireManager, async (req, res) => {
   try {
     const { status } = req.body;
+
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       { status },
       { new: true }
-    ).populate('items.itemId', 'name price');
-    
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-    
+    )
+      .populate('items.itemId', 'name price')
+      .populate('userId', 'username');
+
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
     res.json({ message: 'Order status updated', order });
   } catch (err) {
     console.error('Error updating order:', err);
-    res.status(500).json({ error: 'Failed to update order' });
+    res.status(500).json({ message: 'Failed to update order' });
   }
 });
 

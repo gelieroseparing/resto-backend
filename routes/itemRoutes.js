@@ -1,9 +1,12 @@
-const router = require('express').Router();
+// routes/itemRoutes.js
+const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Item = require('../models/Item');
-const auth = require('../middleware/auth');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
+
+const router = express.Router();
 
 // Ensure uploads folder exists
 if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
@@ -11,7 +14,7 @@ if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
 // Multer storage config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
 });
 
 const upload = multer({
@@ -20,49 +23,50 @@ const upload = multer({
     if (!file) return cb(null, true);
     const ext = path.extname(file.originalname).toLowerCase();
     if (['.png', '.jpg', '.jpeg', '.gif'].includes(ext)) cb(null, true);
-    else cb(new Error('Only images are allowed'));
-  }
+    else cb(new Error('Only image files are allowed'));
+  },
 });
 
-// CREATE item
-router.post('/', auth, upload.single('image'), async (req, res) => {
+// CREATE item (admin only)
+router.post('/', verifyToken, requireAdmin, upload.single('image'), async (req, res) => {
   try {
     const { name, price, category, isAvailable } = req.body;
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : '';
-    
-    const item = await Item.create({ 
-      name, 
-      price, 
-      category, 
+
+    const item = await Item.create({
+      name,
+      price,
+      category,
       imageUrl,
-      isAvailable: isAvailable !== undefined ? isAvailable === 'true' : true
+      isAvailable: isAvailable !== undefined ? isAvailable === 'true' : true,
     });
-    
-    res.json(item);
+
+    res.status(201).json(item);
   } catch (err) {
-    console.error(err);
+    console.error('Item creation error:', err);
     res.status(500).json({ error: 'Failed to create item' });
   }
 });
 
-// UPDATE item
-router.put('/:id', auth, upload.single('image'), async (req, res) => {
+// UPDATE item (admin only)
+router.put('/:id', verifyToken, requireAdmin, upload.single('image'), async (req, res) => {
   try {
     const { name, price, category, isAvailable } = req.body;
     const updateData = { name, price, category };
-    
+
     if (req.file) updateData.imageUrl = `/uploads/${req.file.filename}`;
     if (isAvailable !== undefined) updateData.isAvailable = isAvailable === 'true';
 
     const item = await Item.findByIdAndUpdate(req.params.id, updateData, { new: true });
     res.json(item);
   } catch (err) {
+    console.error('Item update error:', err);
     res.status(500).json({ error: 'Failed to update item' });
   }
 });
 
-// DELETE item
-router.delete('/:id', auth, async (req, res) => {
+// DELETE item (admin only)
+router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
   try {
     const item = await Item.findById(req.params.id);
     if (!item) return res.status(404).json({ error: 'Item not found' });
@@ -77,27 +81,18 @@ router.delete('/:id', auth, async (req, res) => {
     await item.deleteOne();
     res.json({ message: 'Item deleted' });
   } catch (err) {
+    console.error('Item deletion error:', err);
     res.status(500).json({ error: 'Failed to delete item' });
   }
 });
 
-// GET all items - Filter unavailable items for non-admin users
+// GET all items
 router.get('/', async (req, res) => {
   try {
-    // Check if request is from admin (has authorization header)
-    const isAdminRequest = req.headers.authorization && req.headers.authorization.startsWith('Bearer ');
-    
-    let items;
-    if (isAdminRequest) {
-      // Admins can see all items
-      items = await Item.find();
-    } else {
-      // Customers only see available items
-      items = await Item.find({ isAvailable: true });
-    }
-    
+    const items = await Item.find({ isAvailable: true });
     res.json(items);
   } catch (err) {
+    console.error('Fetch items error:', err);
     res.status(500).json({ error: 'Failed to fetch items' });
   }
 });

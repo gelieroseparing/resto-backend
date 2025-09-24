@@ -9,7 +9,7 @@ const { verifyToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-/* ---------------------- Multer setup for image uploads ---------------------- */
+/* ---------------------- Multer setup for profile images ---------------------- */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, './uploads/'),
   filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
@@ -21,7 +21,7 @@ const upload = multer({
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Only image files are allowed!'), false);
   },
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
 /* ----------------------------- USER SIGNUP ----------------------------- */
@@ -34,9 +34,9 @@ router.post('/signup', async (req, res) => {
     }
 
     if (username.length < 3 || password.length < 6) {
-      return res
-        .status(400)
-        .json({ message: 'Username must be 3+ chars and password 6+ chars' });
+      return res.status(400).json({
+        message: 'Username must be at least 3 characters and password at least 6 characters',
+      });
     }
 
     const exists = await User.findOne({ username });
@@ -59,8 +59,10 @@ router.post('/signup', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password)
+
+    if (!username || !password) {
       return res.status(400).json({ message: 'Username and password are required' });
+    }
 
     const user = await User.findOne({ username });
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
@@ -111,7 +113,7 @@ router.get('/profile', verifyToken, async (req, res) => {
   }
 });
 
-/* ---------------------------- GET ALL USERS ---------------------------- */
+/* ---------------------------- GET ALL USERS (Admin only) ---------------------------- */
 router.get('/users', verifyToken, requireAdmin, async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ createdAt: -1 });

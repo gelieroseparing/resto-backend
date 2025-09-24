@@ -1,76 +1,44 @@
 // middleware/auth.js
 const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 
-/* ---------------------- Verify JWT Token ---------------------- */
-const verifyToken = (req, res, next) => {
-  // Look for token in multiple locations
-  const token =
-    req.headers.authorization?.startsWith('Bearer ')
-      ? req.headers.authorization.slice(7)
-      : req.headers['x-access-token'] ||
-        req.query.token;
-
-  if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: 'Access denied. No token provided.',
-    });
-  }
-
+// Middleware to verify JWT token
+const verifyToken = async (req, res, next) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // contains { userId, username, position, iat, exp }
-    next();
-  } catch (error) {
-    console.error('Token verification error:', error);
+    const authHeader = req.headers.authorization;
 
-    let message = 'Invalid token';
-    if (error.name === 'TokenExpiredError') {
-      message = 'Token expired';
-    } else if (error.name === 'JsonWebTokenError') {
-      message = 'Malformed token';
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Unauthorized: Token missing' });
     }
 
-    return res.status(401).json({
-      success: false,
-      message,
-    });
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findById(decoded.userId).select('-password');
+    if (!user) return res.status(401).json({ message: 'Unauthorized: User not found' });
+
+    req.user = { id: user._id, username: user.username, position: user.position };
+    next();
+  } catch (err) {
+    console.error('Token verification error:', err);
+    res.status(401).json({ message: 'Unauthorized: Invalid token' });
   }
 };
 
-/* ---------------------- Admin-only Middleware ---------------------- */
+// Middleware to require admin role
 const requireAdmin = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
   if (req.user.position !== 'admin') {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied. Admin privileges required.',
-    });
+    return res.status(403).json({ message: 'Forbidden: Admins only' });
   }
   next();
 };
 
-/* ---------------------- Manager/Admin Middleware ---------------------- */
+// Middleware to require manager role
 const requireManager = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-
-  const allowedPositions = ['admin', 'manager'];
-  if (!allowedPositions.includes(req.user.position)) {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied. Manager privileges required.',
-    });
+  if (req.user.position !== 'manager' && req.user.position !== 'admin') {
+    return res.status(403).json({ message: 'Forbidden: Managers or Admins only' });
   }
   next();
 };
 
-module.exports = {
-  verifyToken,
-  requireAdmin,
-  requireManager,
-};
+module.exports = { verifyToken, requireAdmin, requireManager };
