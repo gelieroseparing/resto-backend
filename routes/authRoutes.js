@@ -1,11 +1,10 @@
-// routes/authRoutes.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
-const User = require('../models/User'); // Your User model
-const { verifyToken } = require('../middleware/auth'); // Your auth middleware
+const User = require('../models/User'); // Your existing User model
+const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -24,16 +23,21 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
-/* ---------------------- Signup ---------------------- */
+/* ---------------------- Signup (positions: chief, staff, cashier) ---------------------- */
 router.post('/signup', async (req, res) => {
   try {
     const { username, password, position } = req.body;
 
-    if (!username || !password || !position)
+    // Validate fields and positions (match frontend: chief, staff, cashier)
+    if (!username || !password || !position) {
       return res.status(400).json({ message: 'All fields are required' });
-
-    if (username.length < 3 || password.length < 6)
+    }
+    if (username.length < 3 || password.length < 6) {
       return res.status(400).json({ message: 'Username must be at least 3 chars, password at least 6' });
+    }
+    if (!['chief', 'staff', 'cashier'].includes(position)) {
+      return res.status(400).json({ message: 'Invalid position: must be chief, staff, or cashier' });
+    }
 
     const exists = await User.findOne({ username });
     if (exists) return res.status(400).json({ message: 'Username already exists' });
@@ -42,12 +46,12 @@ router.post('/signup', async (req, res) => {
     const user = await User.create({ username, password: hash, position });
 
     res.status(201).json({
-      message: 'User created successfully',
-      user: { id: user._id, username: user.username, position: user.position },
+      message: 'User  created successfully',
+      user: { id: user._id, username: user.username, position: user.position, profileImage: user.profileImage },
     });
   } catch (err) {
     console.error('Signup error:', err);
-    res.status(500).json({ message: 'Server error during signup' });
+    res.status(500).json({ message: 'Server error during signup', error: err.message });
   }
 });
 
@@ -56,8 +60,9 @@ router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    if (!username || !password)
+    if (!username || !password) {
       return res.status(400).json({ message: 'Username and password are required' });
+    }
 
     const user = await User.findOne({ username });
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
@@ -78,12 +83,12 @@ router.post('/login', async (req, res) => {
         id: user._id,
         username: user.username,
         position: user.position,
-        profileImage: user.profileImage || '/uploads/profile.jpg',
+        profileImage: user.profileImage, // Use actual from DB
       },
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ message: 'Server error during login' });
+    res.status(500).json({ message: 'Server error during login', error: err.message });
   }
 });
 
@@ -91,11 +96,11 @@ router.post('/login', async (req, res) => {
 router.get('/profile', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) return res.status(404).json({ message: 'User  not found' });
     res.json({ user });
   } catch (err) {
     console.error('Profile fetch error:', err);
-    res.status(500).json({ message: 'Server error while fetching profile' });
+    res.status(500).json({ message: 'Server error while fetching profile', error: err.message });
   }
 });
 
@@ -105,6 +110,8 @@ router.put('/profile', verifyToken, upload.single('profileImage'), async (req, r
     const userId = req.user.userId;
     const { username } = req.body;
 
+    if (!username) return res.status(400).json({ message: 'Username is required' });
+
     const updateData = { username };
 
     if (req.file) {
@@ -113,12 +120,15 @@ router.put('/profile', verifyToken, upload.single('profileImage'), async (req, r
 
     const user = await User.findByIdAndUpdate(userId, updateData, { new: true }).select('-password');
 
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) return res.status(404).json({ message: 'User  not found' });
 
-    res.json({ user });
+    res.json({ message: 'Profile updated successfully', user });
   } catch (err) {
     console.error('Profile update error:', err);
-    res.status(500).json({ message: 'Error updating profile' });
+    if (err.message.includes('Only image files')) {
+      return res.status(400).json({ message: err.message });
+    }
+    res.status(500).json({ message: 'Error updating profile', error: err.message });
   }
 });
 
@@ -127,9 +137,13 @@ router.put('/change-password', verifyToken, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const userId = req.user.userId;
 
+  if (!currentPassword || !newPassword || newPassword.length < 6) {
+    return res.status(400).json({ message: 'Current password and new password (min 6 chars) are required' });
+  }
+
   try {
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) return res.status(404).json({ message: 'User  not found' });
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Current password is incorrect' });
@@ -141,7 +155,7 @@ router.put('/change-password', verifyToken, async (req, res) => {
     res.json({ message: 'Password updated successfully' });
   } catch (err) {
     console.error('Password change error:', err);
-    res.status(500).json({ message: 'Error changing password' });
+    res.status(500).json({ message: 'Error changing password', error: err.message });
   }
 });
 

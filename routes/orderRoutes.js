@@ -5,7 +5,7 @@ const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-/* ------------------------- CREATE ORDER ------------------------- */
+// Create Order: accessible to all roles
 router.post('/', verifyToken, async (req, res) => {
   try {
     const {
@@ -17,12 +17,10 @@ router.post('/', verifyToken, async (req, res) => {
       paymentMethod
     } = req.body;
 
-    // Basic validation
     if (!items || items.length === 0) {
       return res.status(400).json({ message: 'Order must include at least one item' });
     }
 
-    // Create the order document
     const order = await Order.create({
       orderType,
       items,
@@ -31,15 +29,13 @@ router.post('/', verifyToken, async (req, res) => {
       subtotal,
       paymentMethod,
       createdBy: req.user.userId,
-      userId: req.user.userId,
     });
 
-    // Decrease stock quantities for each item ordered
+    // Update stock (if applicable)
     for (const item of items) {
       await Item.findByIdAndUpdate(item.itemId, { $inc: { quantity: -item.quantity } });
     }
 
-    // Populate references for response
     const populatedOrder = await Order.findById(order._id)
       .populate('items.itemId', 'name price')
       .populate('createdBy', 'username');
@@ -51,7 +47,7 @@ router.post('/', verifyToken, async (req, res) => {
   }
 });
 
-/* ------------------------- GET ALL ORDERS ------------------------- */
+// Get all orders: all roles
 router.get('/', verifyToken, async (req, res) => {
   try {
     const orders = await Order.find()
@@ -66,7 +62,7 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-/* ------------------------- GET SINGLE ORDER ------------------------- */
+// Get single order
 router.get('/:id', verifyToken, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -81,7 +77,7 @@ router.get('/:id', verifyToken, async (req, res) => {
   }
 });
 
-/* ------------------------- UPDATE ORDER STATUS ------------------------- */
+// Update order status
 router.patch('/:id/status', verifyToken, async (req, res) => {
   try {
     const { status } = req.body;
