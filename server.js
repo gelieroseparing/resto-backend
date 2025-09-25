@@ -7,9 +7,9 @@ const fs = require('fs'); // For creating uploads folder
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
-const itemsRoutes = require('./routes/itemaroutes');
+const itemsRoutes = require('./routes/itemRoutes');
 const ordersRoutes = require('./routes/orderRoutes');
-const categoriesRoutes = require('./routes/categories');
+const categoriesRoutes = require('./routes/categoryRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
