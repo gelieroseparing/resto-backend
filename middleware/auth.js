@@ -1,37 +1,20 @@
-// middleware/auth.js
 const jwt = require('jsonwebtoken');
 
-function verifyToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Expect Bearer token
-
-  if (!token) {
-    return res.status(401).json({ message: 'Access denied, no token provided' });
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Unauthorized: No token provided' });
   }
+
+  const token = authHeader.split(' ')[1];
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // Attach decoded payload
+    req.user = decoded; // attach decoded payload to request
     next();
   } catch (err) {
-    res.status(401).json({ message: 'Invalid token' });
+    return res.status(401).json({ message: 'Invalid token' });
   }
-}
-
-// Middleware for role-based access control
-function requireRole(roles = []) {
-  if (typeof roles === 'string') {
-    roles = [roles];
-  }
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.position)) {
-      return res.status(403).json({ message: 'Access denied: insufficient permissions' });
-    }
-    next();
-  };
-}
-
-module.exports = {
-  verifyToken,
-  requireRole,
 };
+
+module.exports = verifyToken;

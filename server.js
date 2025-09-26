@@ -26,22 +26,20 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static images from uploads
+// Serve static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Import your routes
+// Import routes
 const authRoutes = require('./routes/authRoutes');
-const itemsRoutes = require('./routes/itemRoutes');
-const ordersRoutes = require('./routes/orderRoutes');
-const categoriesRoutes = require('./routes/categoryRoutes');
+const itemRoutes = require('./routes/itemRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
 
-// Use routes under /api
 app.use('/api/auth', authRoutes);
-app.use('/api/items', itemsRoutes);
-app.use('/api/orders', ordersRoutes);
-app.use('/api/categories', categoriesRoutes);
+app.use('/api/items', itemRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/categories', categoryRoutes);
 
-// Root route
 app.get('/', (req, res) => {
   res.send('Resto POS Backend is running');
 });

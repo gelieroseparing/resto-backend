@@ -1,166 +1,60 @@
-// routes/authRoutes.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const path = require('path');
-const User = require('../models/User');
+const User = require('../models/User'); // Your User model
+const verifyToken = require('../middleware/authMiddleware'); // Middleware for protected routes
 
 const router = express.Router();
 
-// Multer setup for profile image upload
-const multer = require('multer');
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, './uploads/'),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
-});
-const upload = multer({ 
-  storage,
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only image files are allowed!'), false);
-  },
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
-});
-
-// Signup route with image upload
-router.post('/signup', upload.single('profileImage'), async (req, res) => {
+// Register new user
+router.post('/signup', async (req, res) => {
+  const { username, email, password } = req.body;
   try {
-    const { username, password, position } = req.body;
-
-    if (!username || !password || !position) {
-      return res.status(400).json({ message: 'All fields are required' });
-    }
-    if (!['chief', 'staff', 'cashier'].includes(position)) {
-      return res.status(400).json({ message: 'Invalid position' });
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Email already exists' });
     }
 
-    const exists = await User.findOne({ username });
-    if (exists) return res.status(400).json({ message: 'Username already exists' });
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    const hash = await bcrypt.hash(password, 10);
+    const newUser = new User({ username, email, password: hashedPassword });
+    await newUser.save();
 
-    // Save image path if uploaded
-    let profileImagePath = '/profile.jpg'; // default
-    if (req.file) {
-      profileImagePath = `/uploads/${req.file.filename}`;
-    }
-
-    const user = await User.create({ username, password: hash, position, profileImage: profileImagePath });
-
-    res.status(201).json({
-      message: 'User created successfully',
-      user: { id: user._id, username: user.username, position: user.position, profileImage: user.profileImage }
-    });
+    res.status(201).json({ message: 'User created successfully' });
   } catch (err) {
-    console.error('Signup error:', err);
-    res.status(500).json({ message: 'Server error during signup', error: err.message });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// Login route
+// Login user
 router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
   try {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({ message: 'Username and password are required' });
-    }
-
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
-    const token = jwt.sign(
-      { userId: user._id, username: user.username, position: user.position },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
-    );
+    const payload = { userId: user._id, email: user.email };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    res.json({
-      message: 'Login successful',
-      token,
-      user: {
-        id: user._id,
-        username: user.username,
-        position: user.position,
-        profileImage: user.profileImage,
-      },
-    });
+    res.json({ token, user: { id: user._id, username: user.username, email: user.email } });
   } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ message: 'Server error during login', error: err.message });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// Get profile
+// Get user profile (protected route)
 router.get('/profile', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password');
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json({ user });
+    res.json(user);
   } catch (err) {
-    console.error('Profile fetch error:', err);
-    res.status(500).json({ message: 'Server error while fetching profile', error: err.message });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// Update profile with image upload
-router.put('/profile', verifyToken, upload.single('profileImage'), async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { username } = req.body;
-
-    if (!username) return res.status(400).json({ message: 'Username is required' });
-
-    const updateData = { username };
-
-    if (req.file) {
-      updateData.profileImage = `/uploads/${req.file.filename}`;
-    }
-
-    const user = await User.findByIdAndUpdate(userId, updateData, { new: true }).select('-password');
-
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    res.json({ message: 'Profile updated successfully', user });
-  } catch (err) {
-    console.error('Profile update error:', err);
-    if (err.message.includes('Only image files')) {
-      return res.status(400).json({ message: err.message });
-    }
-    res.status(500).json({ message: 'Error updating profile', error: err.message });
-  }
-});
-
-// Change password
-router.put('/change-password', verifyToken, async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  const userId = req.user.userId;
-
-  if (!currentPassword || !newPassword || newPassword.length < 6) {
-    return res.status(400).json({ message: 'Current password and new password (min 6 chars) are required' });
-  }
-
-  try {
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Current password is incorrect' });
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
-    await user.save();
-
-    res.json({ message: 'Password updated successfully' });
-  } catch (err) {
-    console.error('Password change error:', err);
-    res.status(500).json({ message: 'Error changing password', error: err.message });
-  }
-});
-
-module.exports = { verifyToken, requireRole, router };
+module.exports = router;
