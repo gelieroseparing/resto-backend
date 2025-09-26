@@ -1,53 +1,57 @@
+// routes/authRoutes.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const multer = require('multer');
 const path = require('path');
-const User = require('../models/User'); // Your existing User model
-const { verifyToken } = require('../middleware/auth');
+const User = require('../models/User');
 
 const router = express.Router();
 
-/* ---------------------- Multer setup for profile images ---------------------- */
+// Multer setup for profile image upload
+const multer = require('multer');
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, './uploads/'),
   filename: (req, file, cb) =>
-    cb(null, Date.now() + Math.random().toString(36).substring(2, 8) + path.extname(file.originalname)),
+    cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
 });
-const upload = multer({
+const upload = multer({ 
   storage,
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Only image files are allowed!'), false);
   },
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
 });
 
-/* ---------------------- Signup (positions: chief, staff, cashier) ---------------------- */
-router.post('/signup', async (req, res) => {
+// Signup route with image upload
+router.post('/signup', upload.single('profileImage'), async (req, res) => {
   try {
     const { username, password, position } = req.body;
 
-    // Validate fields and positions (match frontend: chief, staff, cashier)
     if (!username || !password || !position) {
       return res.status(400).json({ message: 'All fields are required' });
     }
-    if (username.length < 3 || password.length < 6) {
-      return res.status(400).json({ message: 'Username must be at least 3 chars, password at least 6' });
-    }
     if (!['chief', 'staff', 'cashier'].includes(position)) {
-      return res.status(400).json({ message: 'Invalid position: must be chief, staff, or cashier' });
+      return res.status(400).json({ message: 'Invalid position' });
     }
 
     const exists = await User.findOne({ username });
     if (exists) return res.status(400).json({ message: 'Username already exists' });
 
     const hash = await bcrypt.hash(password, 10);
-    const user = await User.create({ username, password: hash, position });
+
+    // Save image path if uploaded
+    let profileImagePath = '/profile.jpg'; // default
+    if (req.file) {
+      profileImagePath = `/uploads/${req.file.filename}`;
+    }
+
+    const user = await User.create({ username, password: hash, position, profileImage: profileImagePath });
 
     res.status(201).json({
-      message: 'User  created successfully',
-      user: { id: user._id, username: user.username, position: user.position, profileImage: user.profileImage },
+      message: 'User created successfully',
+      user: { id: user._id, username: user.username, position: user.position, profileImage: user.profileImage }
     });
   } catch (err) {
     console.error('Signup error:', err);
@@ -55,7 +59,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-/* ---------------------- Login ---------------------- */
+// Login route
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -83,7 +87,7 @@ router.post('/login', async (req, res) => {
         id: user._id,
         username: user.username,
         position: user.position,
-        profileImage: user.profileImage, // Use actual from DB
+        profileImage: user.profileImage,
       },
     });
   } catch (err) {
@@ -92,11 +96,11 @@ router.post('/login', async (req, res) => {
   }
 });
 
-/* ---------------------- Get Profile ---------------------- */
+// Get profile
 router.get('/profile', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password');
-    if (!user) return res.status(404).json({ message: 'User  not found' });
+    if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ user });
   } catch (err) {
     console.error('Profile fetch error:', err);
@@ -104,7 +108,7 @@ router.get('/profile', verifyToken, async (req, res) => {
   }
 });
 
-/* ---------------------- Update Profile (with image upload) ---------------------- */
+// Update profile with image upload
 router.put('/profile', verifyToken, upload.single('profileImage'), async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -120,7 +124,7 @@ router.put('/profile', verifyToken, upload.single('profileImage'), async (req, r
 
     const user = await User.findByIdAndUpdate(userId, updateData, { new: true }).select('-password');
 
-    if (!user) return res.status(404).json({ message: 'User  not found' });
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     res.json({ message: 'Profile updated successfully', user });
   } catch (err) {
@@ -132,7 +136,7 @@ router.put('/profile', verifyToken, upload.single('profileImage'), async (req, r
   }
 });
 
-/* ---------------------- Change Password ---------------------- */
+// Change password
 router.put('/change-password', verifyToken, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const userId = req.user.userId;
@@ -143,7 +147,7 @@ router.put('/change-password', verifyToken, async (req, res) => {
 
   try {
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User  not found' });
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Current password is incorrect' });
@@ -159,4 +163,4 @@ router.put('/change-password', verifyToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = { verifyToken, requireRole, router };

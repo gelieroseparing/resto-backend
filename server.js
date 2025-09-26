@@ -1,15 +1,9 @@
-require('dotenv').config(); // Load env variables
+require('dotenv').config(); // Load environment variables
 const express = require('express');
 const mongoose = require('mongoose');
 const path = require('path');
 const cors = require('cors');
-const fs = require('fs'); // For creating uploads folder
-
-// Import routes
-const authRoutes = require('./routes/authRoutes');
-const itemsRoutes = require('./routes/itemRoutes');
-const ordersRoutes = require('./routes/orderRoutes');
-const categoriesRoutes = require('./routes/categoryRoutes');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -24,29 +18,35 @@ if (!fs.existsSync(uploadsDir)) {
 // Middleware
 app.use(cors({
   origin: [
-    'http://localhost:3000', // Local dev
-    'https://your-frontend-domain.onrender.com' // Replace with your actual Render frontend URL
+    'http://localhost:3000',
+    'https://your-frontend-domain.onrender.com' // replace with your frontend URL
   ],
-  credentials: true
+  credentials: true,
 }));
-app.use(express.json()); // Parse JSON
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Serve static files (images from uploads)
+// Serve static images from uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Routes - All under /api
+// Import your routes
+const authRoutes = require('./routes/authRoutes');
+const itemsRoutes = require('./routes/itemRoutes');
+const ordersRoutes = require('./routes/orderRoutes');
+const categoriesRoutes = require('./routes/categoryRoutes');
+
+// Use routes under /api
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/categories', categoriesRoutes);
 
-// Default route
+// Root route
 app.get('/', (req, res) => {
   res.send('Resto POS Backend is running');
 });
 
-// 404 Handler
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
