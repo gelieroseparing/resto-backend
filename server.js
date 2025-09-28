@@ -35,6 +35,33 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// DEBUG: Detailed route loading check
+console.log('=== DETAILED ROUTE DEBUG ===');
+console.log('1. categoryRoutes:', categoryRoutes ? 'LOADED' : 'FAILED', typeof categoryRoutes);
+console.log('2. authRoutes:', authRoutes ? 'LOADED' : 'FAILED', typeof authRoutes);
+console.log('3. itemRoutes:', itemRoutes ? 'LOADED' : 'FAILED', typeof itemRoutes);
+console.log('4. orderRoutes:', orderRoutes ? 'LOADED' : 'FAILED', typeof orderRoutes);
+
+// Check if they are Express routers
+if (authRoutes && authRoutes.stack) {
+  console.log('✅ authRoutes is an Express router with', authRoutes.stack.length, 'routes');
+} else {
+  console.log('❌ authRoutes is NOT an Express router');
+}
+
+if (itemRoutes && itemRoutes.stack) {
+  console.log('✅ itemRoutes is an Express router with', itemRoutes.stack.length, 'routes');
+} else {
+  console.log('❌ itemRoutes is NOT an Express router');
+}
+
+if (orderRoutes && orderRoutes.stack) {
+  console.log('✅ orderRoutes is an Express router with', orderRoutes.stack.length, 'routes');
+} else {
+  console.log('❌ orderRoutes is NOT an Express router');
+}
+console.log('============================');
+
 // Routes (without /api prefix)
 app.use('/category', categoryRoutes);
 app.use('/auth', authRoutes);
@@ -61,6 +88,20 @@ app.get('/public/items', async (req, res) => {
     console.error('Error fetching public items:', err);
     res.status(500).json({ message: 'Error fetching items' });
   }
+});
+
+// Individual route tests
+app.get('/test-category', (req, res) => res.json({ message: 'Category routes mounted' }));
+app.get('/test-auth', (req, res) => res.json({ message: 'Auth routes mounted' }));
+app.get('/test-items', (req, res) => res.json({ message: 'Items routes mounted' }));
+app.get('/test-orders', (req, res) => res.json({ message: 'Orders routes mounted' }));
+
+// Test auth route
+app.get('/test-auth-route', (req, res) => {
+  res.json({ 
+    message: 'Auth routes test',
+    authRoutes: ['POST /auth/signup', 'POST /auth/login', 'GET /auth/profile']
+  });
 });
 
 // Default route
@@ -121,12 +162,5 @@ connectDB().then(() => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
     console.log('Routes configured without /api prefix');
-  });
-});
-// Add this right after your other routes
-app.get('/test-auth', (req, res) => {
-  res.json({ 
-    message: 'Auth routes test',
-    authRoutes: ['POST /auth/signup', 'POST /auth/login', 'GET /auth/profile']
   });
 });
