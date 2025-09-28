@@ -123,3 +123,10 @@ connectDB().then(() => {
     console.log('Routes configured without /api prefix');
   });
 });
+// Add this right after your other routes
+app.get('/test-auth', (req, res) => {
+  res.json({ 
+    message: 'Auth routes test',
+    authRoutes: ['POST /auth/signup', 'POST /auth/login', 'GET /auth/profile']
+  });
+});
