@@ -164,3 +164,22 @@ connectDB().then(() => {
     console.log('Routes configured without /api prefix');
   });
 });
+// DEBUG: Check specific auth routes
+console.log('=== AUTH ROUTES DETAILED DEBUG ===');
+if (authRoutes && authRoutes.stack) {
+  authRoutes.stack.forEach((layer, index) => {
+    if (layer.route) {
+      const methods = Object.keys(layer.route.methods).map(method => method.toUpperCase());
+      console.log(`Route ${index + 1}: ${methods.join(', ')} ${layer.route.path}`);
+    }
+  });
+} else {
+  console.log('No routes found in authRoutes');
+}
+console.log('==================================');
+
+
+// Test POST route
+app.post('/test-post', (req, res) => {
+  res.json({ message: 'POST requests work!', body: req.body });
+});
