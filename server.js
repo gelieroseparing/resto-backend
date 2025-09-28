@@ -1,9 +1,15 @@
-require('dotenv').config(); // Load environment variables
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
+
+// Import routes
+const categoryRoutes = require('./routes/categoryRoutes');
+const authRoutes = require('./routes/authRoutes');
+const itemRoutes = require('./routes/itemRoutes');
+const orderRoutes = require('./routes/orderRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,9 +25,9 @@ if (!fs.existsSync(uploadsDir)) {
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://your-frontend-domain.onrender.com' // replace with your frontend URL
+    'https://resto-frontend-4bw1.onrender.com'
   ],
-  credentials: true,
+  credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -29,22 +35,40 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Import routes
-const authRoutes = require('./routes/authRoutes');
-const itemRoutes = require('./routes/itemRoutes');
-const orderRoutes = require('./routes/orderRoutes');
-const categoryRoutes = require('./routes/categoryRoutes');
+// Routes (without /api prefix)
+app.use('/category', categoryRoutes);
+app.use('/auth', authRoutes);
+app.use('/items', itemRoutes);
+app.use('/orders', orderRoutes);
 
-app.use('/api/auth', authRoutes);
-app.use('/api/items', itemRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/categories', categoryRoutes);
+// Health check route (without /api prefix)
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Server is running',
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    timestamp: new Date().toISOString()
+  });
+});
 
+// Public items endpoint (no authentication required) - without /api prefix
+app.get('/public/items', async (req, res) => {
+  try {
+    const Item = require('./models/Item');
+    const items = await Item.find({ isAvailable: true }).sort({ category: 1, name: 1 });
+    res.json(items);
+  } catch (err) {
+    console.error('Error fetching public items:', err);
+    res.status(500).json({ message: 'Error fetching items' });
+  }
+});
+
+// Default route
 app.get('/', (req, res) => {
   res.send('Resto POS Backend is running');
 });
 
-// 404 handler
+// 404 Handler
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
@@ -55,19 +79,47 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Internal server error', error: err.message });
 });
 
-// Connect to MongoDB
-mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => {
-    console.log('MongoDB connected');
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+// Enhanced MongoDB connection with better error handling
+const connectDB = async () => {
+  try {
+    console.log('Attempting to connect to MongoDB...');
+    
+    const conn = await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+      maxPoolSize: 10,
     });
-  })
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
+
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    
+    mongoose.connection.on('error', err => {
+      console.error('MongoDB connection error:', err);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      console.log('MongoDB disconnected');
+    });
+
+    mongoose.connection.on('reconnected', () => {
+      console.log('MongoDB reconnected');
+    });
+
+  } catch (error) {
+    console.error('MongoDB connection failed:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.code
+    });
     process.exit(1);
+  }
+};
+
+// Connect to MongoDB and start server
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV}`);
+    console.log('Routes configured without /api prefix');
   });
+});
